@@ -1,0 +1,78 @@
+<!doctype html>
+<tt>
+Archive name: <input id=an value="archive.zip"> / File name: <input id=fn value="index.html">
+<br>File content:
+<br>
+<textarea id=fc style="width:550px; height:200px; border: 2px solid"></textarea>
+<p><button id=bz>Build zip</button>
+<a id=DL download="index.zip">DOWNLOAD</a>
+<script src="libzopfli.js"></script>
+<script src="compress.js"></script>
+<script src="byte-b64.js"></script>
+<script type=module>
+const z = window.Module;
+
+function ensureByteBuffer(input) {
+  if (typeof input === 'string') {
+    const a = z.intArrayFromString(input);
+    a.length--; // because emscripten's intArrayFromString() adds trailing nul
+    return a;
+  } else if (Array.isArray(input)) {
+    return Uint8Array.from(input);
+  } else {
+    return input;
+  }
+}
+
+const defaultOptions = {
+  verbose: false,
+  verbose_more: false,
+  numiterations: 15,
+  blocksplitting: true,
+  blocksplittingmax: 15,
+};
+
+function compress(input, format, options) {
+  console.assert(input != null, "buffer must not be null");
+  console.assert(options != null, "options must not be null");
+
+  const byteBuffer = ensureByteBuffer(input);
+  const bufferPtr = z.allocate(byteBuffer, 'i8', z.ALLOC_NORMAL);
+
+  const opts = { ...defaultOptions, ...options };
+
+  const output = z._createZopfliJsOutput();
+  z._compress(bufferPtr, byteBuffer.length, output,
+    format,
+    opts.verbose,
+    opts.verbose_more,
+    opts.numiterations,
+    opts.blocksplitting,
+    opts.blocksplittingmax,
+  );
+
+  const outputPtr = z._getBuffer(output);
+  const outputSize = z._getBufferSize(output);
+
+  const result = z.HEAPU8.slice(outputPtr, outputPtr + outputSize);
+  z._deallocate(outputPtr);
+  z._deallocate(output);
+  z._deallocate(bufferPtr);
+
+  return result;
+}
+
+bz.onclick = () => {
+
+  var inflated = (new TextEncoder()).encode(fc.value);
+  var deflated = compress(inflated, 2, defaultOptions);
+  var zipzop = makeZip(fn.value, inflated, deflated);
+  var decoder = new TextDecoder('utf8');
+  var zipzop64 = bytesToBase64(zipzop);
+  console.log(zipzop64);
+  DL.setAttribute("download", an.value);
+  DL.href = "data:application/zip;base64," + zipzop64;
+  
+}
+
+</script>
